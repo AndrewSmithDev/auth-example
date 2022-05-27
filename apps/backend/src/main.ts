@@ -5,8 +5,10 @@ import * as jwt from 'jsonwebtoken';
 import * as passport from 'passport';
 import { UserModel } from './app/user.model';
 import './app/passport-jwt';
+import { jwtConfig } from './app/jwt-config';
+import { RefreshTokenModel } from './app/refresh-token.model';
 
-mongoose.connect('mongodb://172.21.144.1:27017/auth-boilerplate');
+mongoose.connect(`mongodb://${process.env.mongoUri}/auth-boilerplate`);
 mongoose.connection.on('error', (error) => console.log(error));
 
 const app = express();
@@ -29,17 +31,68 @@ app.post('/login', async (req, res) => {
 
   const user = await UserModel.findOne({ email });
   if (!user) {
-    return res.status(401).send({ message: 'Invalid login' });
+    return res.status(401).send({ status: 'error', message: 'Invalid login' });
   }
 
   const validate = await user.isValidPassword(password);
   if (!validate) {
-    return res.status(401).send({ message: 'Invalid login' });
+    return res.status(401).send({ status: 'error', message: 'Invalid login' });
   }
 
-  const token = jwt.sign({ user: { id: user.id, email } }, 'TOP_SECRET');
-  return res.json({ token });
+  const accessToken = jwt.sign(
+    jwtConfig.createTokenContents(user),
+    jwtConfig.secret,
+    { expiresIn: jwtConfig.tokenLife }
+  );
+  const currentDateTime = new Date();
+  const refreshToken = jwt.sign(
+    jwtConfig.createTokenContents(user),
+    jwtConfig.refreshSecret,
+    { expiresIn: jwtConfig.refreshTokenLife }
+  );
+
+  const expiry = new Date(
+    new Date().setSeconds(
+      currentDateTime.getSeconds() + jwtConfig.refreshTokenLife
+    )
+  );
+  const rtDoc = new RefreshTokenModel({ refreshToken, expiry, user: user.id });
+  await rtDoc.save();
+
+  return res.json({ status: 'success', accessToken, refreshToken });
 });
+
+app.post(
+  '/refresh-token',
+  passport.authenticate('jwt', { session: false }),
+  async (req, res) => {
+    const { refreshToken } = req.body;
+
+    const savedToken = await RefreshTokenModel.findOne({
+      refreshToken,
+    });
+    if (!savedToken) {
+      return res
+        .status(401)
+        .send({ status: 'error', message: 'Invalid token' });
+    }
+
+    const user = await UserModel.findById(savedToken.user);
+    if (!user) {
+      return res
+        .status(401)
+        .send({ status: 'error', message: 'Invalid token' });
+    }
+
+    const accessToken = jwt.sign(
+      jwtConfig.createTokenContents(user),
+      jwtConfig.secret,
+      { expiresIn: jwtConfig.tokenLife }
+    );
+
+    res.status(200).json({ status: 'success', accessToken, refreshToken });
+  }
+);
 
 app.get(
   '/profile',
