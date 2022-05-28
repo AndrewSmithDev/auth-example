@@ -11,8 +11,10 @@ export const jwtConfig = {
   refreshTokenLife: 24 * hours,
   createTokenContents: (user: User) => {
     return {
-      id: user.id,
-      email: user.email,
+      user: {
+        id: user.id,
+        email: user.email,
+      },
     };
   },
 };
