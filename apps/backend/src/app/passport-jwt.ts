@@ -1,6 +1,6 @@
 import * as passport from 'passport';
 import { Strategy, ExtractJwt } from 'passport-jwt';
-import { jwtConfig } from './jwt-config';
+import { jwtConfig } from './jwt';
 import { UserModel } from './user.model';
 
 const opts = {

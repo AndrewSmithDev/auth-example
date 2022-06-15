@@ -17,7 +17,8 @@
     "passport": "^0.6.0",
     "passport-jwt": "^4.0.0",
     "passport-local": "^1.0.0",
-    "tslib": "^2.3.0"
+    "tslib": "^2.3.0",
+    "zod": "^3.17.3"
   },
   "devDependencies": {
     "@nrwl/cli": "14.1.9",

@@ -1,12 +1,17 @@
 import * as bodyParser from 'body-parser';
 import * as express from 'express';
 import * as mongoose from 'mongoose';
-import * as jwt from 'jsonwebtoken';
 import * as passport from 'passport';
 import { UserModel } from './app/user.model';
 import './app/passport-jwt';
-import { jwtConfig } from './app/jwt-config';
+import {
+  createAccessToken,
+  createRefreshToken,
+  refreshTokenLife,
+} from './app/jwt';
 import { RefreshTokenModel } from './app/refresh-token.model';
+import { getSessionMW } from './app/jwt-auth';
+import { createSession } from './app/session';
 
 mongoose.connect(`mongodb://${process.env.mongoUri}/auth-boilerplate`);
 mongoose.connection.on('error', (error) => console.log(error));
@@ -39,23 +44,17 @@ app.post('/login', async (req, res) => {
     return res.status(401).send({ status: 'error', message: 'Invalid login' });
   }
 
-  const accessToken = jwt.sign(
-    jwtConfig.createTokenContents(user),
-    jwtConfig.secret,
-    { expiresIn: jwtConfig.tokenLife }
-  );
-  const currentDateTime = new Date();
-  const refreshToken = jwt.sign(
-    jwtConfig.createTokenContents(user),
-    jwtConfig.refreshSecret,
-    { expiresIn: jwtConfig.refreshTokenLife }
-  );
+  const sessionData = createSession(user);
+  const accessToken = createAccessToken(sessionData);
 
+  const refreshTokenCreationTime = new Date();
+  const refreshToken = createRefreshToken(sessionData);
   const expiry = new Date(
     new Date().setSeconds(
-      currentDateTime.getSeconds() + jwtConfig.refreshTokenLife
+      refreshTokenCreationTime.getSeconds() + refreshTokenLife
     )
   );
+
   const rtDoc = new RefreshTokenModel({ refreshToken, expiry, user: user.id });
   await rtDoc.save();
 
@@ -84,11 +83,8 @@ app.post(
         .send({ status: 'error', message: 'Invalid token' });
     }
 
-    const accessToken = jwt.sign(
-      jwtConfig.createTokenContents(user),
-      jwtConfig.secret,
-      { expiresIn: jwtConfig.tokenLife }
-    );
+    const sessionData = createSession(user);
+    const accessToken = createAccessToken(sessionData);
 
     res.status(200).json({ status: 'success', accessToken, refreshToken });
   }
@@ -98,6 +94,8 @@ app.get(
   '/profile',
   passport.authenticate('jwt', { session: false }),
   (req, res) => {
+    const { session } = getSessionMW(req, res, {});
+    console.log(session);
     res.json({
       message: 'You made it to the secure route',
       user: req.user,
