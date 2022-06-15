@@ -4,11 +4,7 @@ import * as mongoose from 'mongoose';
 import * as passport from 'passport';
 import { UserModel } from './app/user.model';
 import './app/passport-jwt';
-import {
-  createAccessToken,
-  createRefreshToken,
-  refreshTokenLife,
-} from './app/jwt';
+import { createAccessToken, createJwtTokens } from './app/jwt';
 import { RefreshTokenModel } from './app/refresh-token.model';
 import { getSessionMW } from './app/jwt-auth';
 import { createSession } from './app/session';
@@ -21,7 +17,7 @@ const app = express();
 app.use(bodyParser.json());
 
 app.get('/', (req, res) => {
-  res.send({ message: 'Welcome to the backend!' });
+  res.send({ message: 'Welcome dto the backend!' });
 });
 
 app.post('/register', async (req, res) => {
@@ -45,18 +41,7 @@ app.post('/login', async (req, res) => {
   }
 
   const sessionData = createSession(user);
-  const accessToken = createAccessToken(sessionData);
-
-  const refreshTokenCreationTime = new Date();
-  const refreshToken = createRefreshToken(sessionData);
-  const expiry = new Date(
-    new Date().setSeconds(
-      refreshTokenCreationTime.getSeconds() + refreshTokenLife
-    )
-  );
-
-  const rtDoc = new RefreshTokenModel({ refreshToken, expiry, user: user.id });
-  await rtDoc.save();
+  const { accessToken, refreshToken } = await createJwtTokens(sessionData);
 
   return res.json({ status: 'success', accessToken, refreshToken });
 });

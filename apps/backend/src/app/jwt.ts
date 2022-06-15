@@ -1,4 +1,5 @@
 import * as jwt from 'jsonwebtoken';
+import { RefreshTokenModel } from './refresh-token.model';
 import { isSession, Session } from './session';
 import { User } from './user.model';
 
@@ -21,17 +22,37 @@ const jwtConfig = {
   },
 };
 
-export function createAccessToken(payload: Session) {
-  return jwt.sign(payload, jwtConfig.secret, {
+export function createAccessToken(session: Session) {
+  return jwt.sign(session, jwtConfig.secret, {
     expiresIn: jwtConfig.tokenLife,
   });
 }
 
-export const { refreshTokenLife } = jwtConfig;
-export function createRefreshToken(payload: Session) {
-  return jwt.sign(payload, jwtConfig.refreshSecret, {
-    expiresIn: refreshTokenLife,
+export function createRefreshToken(session: Session) {
+  return jwt.sign(session, jwtConfig.refreshSecret, {
+    expiresIn: jwtConfig.refreshTokenLife,
   });
+}
+
+export async function createJwtTokens(session: Session) {
+  const accessToken = createAccessToken(session);
+
+  const refreshTokenCreationTime = new Date();
+  const refreshToken = createRefreshToken(session);
+  const expiry = new Date(
+    new Date().setSeconds(
+      refreshTokenCreationTime.getSeconds() + jwtConfig.refreshTokenLife
+    )
+  );
+
+  const rtDoc = new RefreshTokenModel({
+    refreshToken,
+    expiry,
+    user: session.user.id,
+  });
+  await rtDoc.save();
+
+  return { accessToken, refreshToken };
 }
 
 export function extractSession(token: string): Session | undefined {
