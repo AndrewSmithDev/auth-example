@@ -6,6 +6,7 @@ import { createAccessToken, createJwtTokens } from './app/jwt';
 import { RefreshTokenModel } from './app/refresh-token.model';
 import { getSessionMW } from './app/jwt-auth';
 import { createSession } from './app/session';
+import { handleRoute } from './app/router-handler';
 
 mongoose.connect(`mongodb://${process.env.mongoUri}/auth-boilerplate`);
 mongoose.connection.on('error', (error) => console.log(error));
@@ -73,18 +74,17 @@ app.post('/refresh-token', async (req, res) => {
     );
 });
 
-app.get('/profile', (req, res) => {
-  getSessionMW(req, res, {})
-    .map(({ session }) => {
-      res.json({
+app.get(
+  '/profile',
+  handleRoute((req, res) =>
+    getSessionMW(req, res, {}).map(({ session }) => ({
+      body: {
         message: 'You made it to the secure route',
         user: session.user,
-      });
-    })
-    .mapLeft(() => {
-      res.status(401).send({ status: 401, message: 'Unauthorized' });
-    });
-});
+      },
+    }))
+  )
+);
 
 const port = process.env.port || 3333;
 const server = app.listen(port, () => {
