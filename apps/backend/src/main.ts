@@ -1,9 +1,7 @@
 import * as bodyParser from 'body-parser';
 import * as express from 'express';
 import * as mongoose from 'mongoose';
-import * as passport from 'passport';
 import { UserModel } from './app/user.model';
-import './app/passport-jwt';
 import { createAccessToken, createJwtTokens } from './app/jwt';
 import { RefreshTokenModel } from './app/refresh-token.model';
 import { getSessionMW } from './app/jwt-auth';
@@ -46,47 +44,45 @@ app.post('/login', async (req, res) => {
   return res.json({ status: 'success', accessToken, refreshToken });
 });
 
-app.post(
-  '/refresh-token',
-  passport.authenticate('jwt', { session: false }),
-  async (req, res) => {
-    const { refreshToken } = req.body;
-
-    const savedToken = await RefreshTokenModel.findOne({
-      refreshToken,
-    });
-    if (!savedToken) {
-      return res
-        .status(401)
-        .send({ status: 'error', message: 'Invalid token' });
-    }
-
-    const user = await UserModel.findById(savedToken.user);
-    if (!user) {
-      return res
-        .status(401)
-        .send({ status: 'error', message: 'Invalid token' });
-    }
-
-    const sessionData = createSession(user);
-    const accessToken = createAccessToken(sessionData);
-
-    res.status(200).json({ status: 'success', accessToken, refreshToken });
+app.post('/refresh-token', async (req, res) => {
+  const { session } = getSessionMW(req, res, {});
+  if (!session) {
+    res.status(401).send({ status: 401, message: 'Unauthorized' });
+    return;
   }
-);
 
-app.get(
-  '/profile',
-  passport.authenticate('jwt', { session: false }),
-  (req, res) => {
-    const { session } = getSessionMW(req, res, {});
-    console.log(session);
-    res.json({
-      message: 'You made it to the secure route',
-      user: req.user,
-    });
+  const { refreshToken } = req.body;
+
+  const savedToken = await RefreshTokenModel.findOne({
+    refreshToken,
+  });
+  if (!savedToken) {
+    return res.status(401).send({ status: 401, message: 'Invalid token' });
   }
-);
+
+  const user = await UserModel.findById(savedToken.user);
+  if (!user) {
+    return res.status(401).send({ status: 'error', message: 'Invalid token' });
+  }
+
+  const sessionData = createSession(user);
+  const accessToken = createAccessToken(sessionData);
+
+  res.status(200).json({ status: 'success', accessToken, refreshToken });
+});
+
+app.get('/profile', (req, res) => {
+  const { session } = getSessionMW(req, res, {});
+  if (!session) {
+    res.status(401).send({ status: 401, message: 'Unauthorized' });
+    return;
+  }
+
+  res.json({
+    message: 'You made it to the secure route',
+    user: session.user,
+  });
+});
 
 const port = process.env.port || 3333;
 const server = app.listen(port, () => {

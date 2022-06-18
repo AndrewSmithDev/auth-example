@@ -13,7 +13,10 @@ export const getSessionMW = <T extends Record<string, unknown>>(
   }
 
   const token = authorization.substring(7);
-  const session = extractSession(token);
-
-  return { ...context, session };
+  try {
+    const session = extractSession(token);
+    return { ...context, session };
+  } catch {
+    return { ...context, session: undefined };
+  }
 };
