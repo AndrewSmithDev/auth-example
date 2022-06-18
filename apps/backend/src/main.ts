@@ -45,43 +45,45 @@ app.post('/login', async (req, res) => {
 });
 
 app.post('/refresh-token', async (req, res) => {
-  const { session } = getSessionMW(req, res, {});
-  if (!session) {
-    res.status(401).send({ status: 401, message: 'Unauthorized' });
-    return;
-  }
+  getSessionMW(req, res, {})
+    .map(async () => {
+      const { refreshToken } = req.body;
 
-  const { refreshToken } = req.body;
+      const savedToken = await RefreshTokenModel.findOne({
+        refreshToken,
+      });
+      if (!savedToken) {
+        return res.status(401).send({ status: 401, message: 'Invalid token' });
+      }
 
-  const savedToken = await RefreshTokenModel.findOne({
-    refreshToken,
-  });
-  if (!savedToken) {
-    return res.status(401).send({ status: 401, message: 'Invalid token' });
-  }
+      const user = await UserModel.findById(savedToken.user);
+      if (!user) {
+        return res
+          .status(401)
+          .send({ status: 'error', message: 'Invalid token' });
+      }
 
-  const user = await UserModel.findById(savedToken.user);
-  if (!user) {
-    return res.status(401).send({ status: 'error', message: 'Invalid token' });
-  }
+      const sessionData = createSession(user);
+      const accessToken = createAccessToken(sessionData);
 
-  const sessionData = createSession(user);
-  const accessToken = createAccessToken(sessionData);
-
-  res.status(200).json({ status: 'success', accessToken, refreshToken });
+      res.status(200).json({ status: 'success', accessToken, refreshToken });
+    })
+    .mapLeft(() =>
+      res.status(401).send({ status: 401, message: 'Unauthorized' })
+    );
 });
 
 app.get('/profile', (req, res) => {
-  const { session } = getSessionMW(req, res, {});
-  if (!session) {
-    res.status(401).send({ status: 401, message: 'Unauthorized' });
-    return;
-  }
-
-  res.json({
-    message: 'You made it to the secure route',
-    user: session.user,
-  });
+  getSessionMW(req, res, {})
+    .map(({ session }) => {
+      res.json({
+        message: 'You made it to the secure route',
+        user: session.user,
+      });
+    })
+    .mapLeft(() => {
+      res.status(401).send({ status: 401, message: 'Unauthorized' });
+    });
 });
 
 const port = process.env.port || 3333;

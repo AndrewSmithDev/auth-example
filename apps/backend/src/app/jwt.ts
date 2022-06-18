@@ -1,4 +1,5 @@
 import * as jwt from 'jsonwebtoken';
+import { Just, Maybe, Nothing } from 'purify-ts';
 import { RefreshTokenModel } from './refresh-token.model';
 import { isSession, Session } from './session';
 import { User } from './user.model';
@@ -55,8 +56,14 @@ export async function createJwtTokens(session: Session) {
   return { accessToken, refreshToken };
 }
 
-export function extractSession(token: string): Session | undefined {
-  const session = jwt.verify(token, jwtConfig.secret);
-  if (isSession(session)) return session;
-  return undefined;
+export class InvalidSession extends Error {}
+
+export function extractSession(token: string): Maybe<Session> {
+  try {
+    const session = jwt.verify(token, jwtConfig.secret);
+    if (isSession(session)) return Just(session);
+    return Nothing;
+  } catch {
+    return Nothing;
+  }
 }
