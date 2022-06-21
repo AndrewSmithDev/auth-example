@@ -1,7 +1,7 @@
-import { Request, Response } from 'express';
 import { Either, Just, Nothing } from 'purify-ts';
 import { UnauthorizedError } from './http-errors';
 import { extractSession } from './jwt';
+import { RouteContext } from './router-handler';
 import { Session } from './session';
 
 function extractToken(bearer?: string) {
@@ -11,11 +11,10 @@ function extractToken(bearer?: string) {
   return Just(token);
 }
 
-export const getSessionMW = <T extends Record<string, unknown>>(
-  req: Request,
-  res: Response,
+export const getSessionMW = <T extends RouteContext>(
   context: T
 ): Either<UnauthorizedError, T & { session: Session }> => {
+  const { req } = context;
   return extractToken(req.headers.authorization)
     .chain(extractSession)
     .map((session) => ({ ...context, session }))

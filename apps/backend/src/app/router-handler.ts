@@ -1,24 +1,26 @@
 import { Request, Response } from 'express';
-import { Either, Maybe } from 'purify-ts';
+import { Either, Right } from 'purify-ts';
 import { HttpError, UnauthorizedError } from './http-errors';
 
-export type HttpMethod = 'get';
+export type RouteContext = {
+  req: Request;
+  res: Response;
+};
 
-type HttpResponse<T = unknown> = {
+export type RouteResponse = {
+  res: Response;
+  body: unknown;
   status?: number;
-  body: T;
 };
 
-type Callback<T extends HttpResponse> = (
-  req: Request,
-  res: Response
-) => T | Maybe<T> | Either<HttpError, T>;
-
-const sendResponse = (res: Response) => (httpRes: HttpResponse) => {
-  res.status(httpRes.status ?? 200).send(httpRes.body);
+export const sendResponse = (response: RouteResponse) => {
+  const { res, body, status } = response;
+  res.status(status ?? 200).send(body);
 };
 
-const mapHttpErrorToResponse = (error: HttpError): HttpResponse => {
+const mapHttpErrorToResponse = (
+  error: HttpError
+): Omit<RouteResponse, 'res'> => {
   if (error instanceof UnauthorizedError) {
     return { status: 401, body: { status: 401, message: 'Unauthorize' } };
   }
@@ -28,23 +30,14 @@ const mapHttpErrorToResponse = (error: HttpError): HttpResponse => {
   };
 };
 
-export const handleRoute = <T extends HttpResponse>(callback: Callback<T>) => {
-  return (req: Request, res: Response) => {
-    const cbValue = callback(req, res);
+export const sendErrorResponse = (res: Response) => (error: HttpError) => {
+  const errorResp = mapHttpErrorToResponse(error);
+  sendResponse({ ...errorResp, res });
+};
 
-    if (Maybe.isMaybe(cbValue)) {
-      cbValue
-        .toEither({
-          status: 404,
-          body: { status: 404, message: 'Not Found' },
-        })
-        .bimap(sendResponse(res), sendResponse(res));
-    } else if (Either.isEither(cbValue)) {
-      cbValue
-        .mapLeft(mapHttpErrorToResponse)
-        .bimap(sendResponse(res), sendResponse(res));
-    } else {
-      res.send(200).send(cbValue);
-    }
-  };
+export const handleRoute = (
+  req: Request,
+  res: Response
+): Either<HttpError, RouteContext> => {
+  return Right({ req, res, status: 200 });
 };

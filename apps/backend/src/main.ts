@@ -6,7 +6,11 @@ import { createAccessToken, createJwtTokens } from './app/jwt';
 import { RefreshTokenModel } from './app/refresh-token.model';
 import { getSessionMW } from './app/jwt-auth';
 import { createSession } from './app/session';
-import { handleRoute } from './app/router-handler';
+import {
+  handleRoute,
+  sendErrorResponse,
+  sendResponse,
+} from './app/router-handler';
 
 mongoose.connect(`mongodb://${process.env.MONGO_URI}/auth-boilerplate`);
 mongoose.connection.on('error', (error) => console.log(error));
@@ -46,7 +50,7 @@ app.post('/login', async (req, res) => {
 });
 
 app.post('/refresh-token', async (req, res) => {
-  getSessionMW(req, res, {})
+  getSessionMW({ req, res })
     .map(async () => {
       const { refreshToken } = req.body;
 
@@ -74,17 +78,12 @@ app.post('/refresh-token', async (req, res) => {
     );
 });
 
-app.get(
-  '/profile',
-  handleRoute((req, res) =>
-    getSessionMW(req, res, {}).map(({ session }) => ({
-      body: {
-        message: 'You made it to the secure route',
-        user: session.user,
-      },
-    }))
-  )
-);
+app.get('/profile', (req, res) => {
+  handleRoute(req, res)
+    .chain(getSessionMW)
+    .map((ctx) => ({ ...ctx, body: { message: 'Profile', user: ctx.session } }))
+    .bimap(sendErrorResponse(res), sendResponse);
+});
 
 const port = process.env.PORT || 3333;
 const server = app.listen(port, () => {
