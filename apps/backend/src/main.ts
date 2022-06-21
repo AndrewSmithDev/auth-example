@@ -8,7 +8,7 @@ import { getSessionMW } from './app/jwt-auth';
 import { createSession } from './app/session';
 import { handleRoute } from './app/router-handler';
 
-mongoose.connect(`mongodb://${process.env.mongoUri}/auth-boilerplate`);
+mongoose.connect(`mongodb://${process.env.MONGO_URI}/auth-boilerplate`);
 mongoose.connection.on('error', (error) => console.log(error));
 
 const app = express();
@@ -86,7 +86,7 @@ app.get(
   )
 );
 
-const port = process.env.port || 3333;
+const port = process.env.PORT || 3333;
 const server = app.listen(port, () => {
   console.log(`Listening at http://localhost:${port}\n`);
 });
