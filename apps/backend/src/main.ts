@@ -1,14 +1,14 @@
 import * as bodyParser from 'body-parser';
 import * as express from 'express';
 import * as mongoose from 'mongoose';
-import * as jwt from 'jsonwebtoken';
-import * as passport from 'passport';
 import { UserModel } from './app/user.model';
-import './app/passport-jwt';
-import { jwtConfig } from './app/jwt-config';
+import { createAccessToken, createJwtTokens } from './app/jwt';
 import { RefreshTokenModel } from './app/refresh-token.model';
+import { getSessionMW } from './app/jwt-auth';
+import { createSession } from './app/session';
+import { handleRoute } from './app/router-handler';
 
-mongoose.connect('mongodb://172.21.144.1:27017/auth-boilerplate');
+mongoose.connect(`mongodb://${process.env.mongoUri}/auth-boilerplate`);
 mongoose.connection.on('error', (error) => console.log(error));
 
 const app = express();
@@ -16,7 +16,7 @@ const app = express();
 app.use(bodyParser.json());
 
 app.get('/', (req, res) => {
-  res.send({ message: 'Welcome to the backend!' });
+  res.send({ message: 'Welcome dto the backend!' });
 });
 
 app.post('/register', async (req, res) => {
@@ -39,51 +39,51 @@ app.post('/login', async (req, res) => {
     return res.status(401).send({ status: 'error', message: 'Invalid login' });
   }
 
-  const accessToken = jwt.sign(
-    jwtConfig.createTokenContents(user),
-    jwtConfig.secret,
-    { expiresIn: jwtConfig.tokenLife }
-  );
-  const refreshToken = jwt.sign(
-    jwtConfig.createTokenContents(user),
-    jwtConfig.refreshSecret,
-    { expiresIn: jwtConfig.refreshTokenLife }
-  );
+  const sessionData = createSession(user);
+  const { accessToken, refreshToken } = await createJwtTokens(sessionData);
 
   return res.json({ status: 'success', accessToken, refreshToken });
 });
 
 app.post('/refresh-token', async (req, res) => {
-  const { refreshToken } = req.body;
+  getSessionMW(req, res, {})
+    .map(async () => {
+      const { refreshToken } = req.body;
 
-  const savedToken = await RefreshTokenModel.findOne({ refreshToken });
-  if (!savedToken) {
-    return res.status(401).send({ status: 'error', message: 'Invalid token' });
-  }
+      const savedToken = await RefreshTokenModel.findOne({
+        refreshToken,
+      });
+      if (!savedToken) {
+        return res.status(401).send({ status: 401, message: 'Invalid token' });
+      }
 
-  const user = await UserModel.findById(savedToken.user);
-  if (!user) {
-    return res.status(401).send({ status: 'error', message: 'Invalid token' });
-  }
+      const user = await UserModel.findById(savedToken.user);
+      if (!user) {
+        return res
+          .status(401)
+          .send({ status: 'error', message: 'Invalid token' });
+      }
 
-  const accessToken = jwt.sign(
-    jwtConfig.createTokenContents(user),
-    jwtConfig.secret,
-    { expiresIn: jwtConfig.tokenLife }
-  );
+      const sessionData = createSession(user);
+      const accessToken = createAccessToken(sessionData);
 
-  res.status(200).json({ status: 'success', accessToken });
+      res.status(200).json({ status: 'success', accessToken, refreshToken });
+    })
+    .mapLeft(() =>
+      res.status(401).send({ status: 401, message: 'Unauthorized' })
+    );
 });
 
 app.get(
   '/profile',
-  passport.authenticate('jwt', { session: false }),
-  (req, res) => {
-    res.json({
-      message: 'You made it to the secure route',
-      user: req.user,
-    });
-  }
+  handleRoute((req, res) =>
+    getSessionMW(req, res, {}).map(({ session }) => ({
+      body: {
+        message: 'You made it to the secure route',
+        user: session.user,
+      },
+    }))
+  )
 );
 
 const port = process.env.port || 3333;
