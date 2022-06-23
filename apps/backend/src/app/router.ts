@@ -12,12 +12,19 @@ import {
 const exRouter = express.Router();
 
 export type RouteHandler = (
-  route: Either<HttpError, RouteContext>
-) => Either<HttpError, RouteResponse>;
+  route: Either<HttpError | Error, RouteContext>
+) => Either<HttpError | Error, RouteResponse>;
 
 export const router = {
   get(path: string, handler: RouteHandler) {
     exRouter.get(path, (req, res) => {
+      const route = handleRoute(req, res);
+      handler(route).bimap(sendErrorResponse(res), sendResponse);
+    });
+  },
+
+  post(path: string, handler: RouteHandler) {
+    exRouter.post(path, (req, res) => {
       const route = handleRoute(req, res);
       handler(route).bimap(sendErrorResponse(res), sendResponse);
     });

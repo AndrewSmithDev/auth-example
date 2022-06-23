@@ -8,6 +8,7 @@ import { getSessionMW } from './app/jwt-auth';
 import { createSession } from './app/session';
 import { router } from './app/router';
 import { mapProfileResponse } from './app/controllers/user.controller';
+import { userRepo } from './app/controllers/user.repo';
 
 mongoose.connect(`mongodb://${process.env.MONGO_URI}/auth-boilerplate`);
 mongoose.connection.on('error', (error) => console.log(error));
@@ -20,12 +21,16 @@ app.get('/', (req, res) => {
   res.send({ message: 'Welcome dto the backend!' });
 });
 
-app.post('/register', async (req, res) => {
-  const { email, password } = req.body;
-  const user = new UserModel({ email, password });
-  await user.save();
-  res.send(user);
-});
+// app.post('/register', async (req, res) => {
+//   const { email, password } = req.body;
+//   const user = new UserModel({ email, password });
+//   await user.save();
+//   res.send(user);
+// });
+
+router.post('/register', (route) =>
+  route.map((ctx) => ({ ...ctx, dto: req.body as any })).chain(userRepo.create)
+);
 
 app.post('/login', async (req, res) => {
   const { email, password } = req.body;

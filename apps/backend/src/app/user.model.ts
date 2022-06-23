@@ -1,4 +1,4 @@
-import { Schema, model, Document } from 'mongoose';
+import { Schema, model } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 
 const UserSchema = new Schema<User>({
@@ -20,13 +20,10 @@ UserSchema.pre('save', async function (next) {
 });
 
 UserSchema.methods.isValidPassword = async function (password: string) {
-  const user = this;
-  const compare = await bcrypt.compare(password, user.password);
-
-  return compare;
+  return bcrypt.compare(password, this.password);
 };
 
-export type User = Document & {
+export type User = {
   email: string;
   password: string;
   isValidPassword: (password: string) => Promise<boolean>;
